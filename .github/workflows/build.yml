@@ -1,28 +1,16 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Build
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
     tags:
       - 'production/backend/[0-9]*.[0-9]*.[0-9]*'
       - 'production/frontend/[0-9]*.[0-9]*.[0-9]*'
-  #   branches: [ "main" ]
-  # pull_request:
-  #   branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
-  # workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   backend:
     if: startsWith(github.ref, 'refs/tags/production/backend/')
     runs-on: ubuntu-latest
@@ -32,6 +20,18 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+    
+    - name: Extract version from tag
+      id: extract_version
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        VERSION=$(echo $TAG_NAME | sed 's/production\/backend\///')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "📦 Building version: $VERSION"
+
+    - name: Set Up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
@@ -40,24 +40,37 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build image using docker-compose
-      run: docker compose -f src/api/docker-compose.yml build
-
-    # - name: Extract version from tag
-    #   id: meta
-    #   uses: docker/metadata-action@v5
-    #   with:
-    #     images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
-    #     tags: |
-    #       type=match,pattern=production/backend/(.*),group=1
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+        tags: |
+          type=raw,value=${{ steps.extract_version.outputs.version }}
+          type=raw,value=latest
     
-    # - name: Build and push Docker image with version tag
-    #   uses: docker/build-push-action@v5
-    #   with:
-    #     context: src/api
-    #     file: src/api/docker-compose.yml
-    #     push: true
-    #     tags: ${{ steps.meta.outputs.tags }}
-    #     labels: ${{ steps.meta.outputs.labels }}
-    #     cache-from: type=gha
-    #     cache-to: type=gha,mode=max
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./src/api
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=${{ steps.extract_version.outputs.version }}
+
+    - name: Build Summary
+      run: |
+        echo "### ✅ Build Successful! 🎉" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Service:** Backend" >> $GITHUB_STEP_SUMMARY
+        echo "**Version:** ${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Tag:** ${{ steps.extract_version.outputs.tag_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Images:**" >> $GITHUB_STEP_SUMMARY
+        echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ steps.extract_version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:latest\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "🚀 Ready to deploy using the **Deploy** workflow!" >> $GITHUB_STEP_SUMMARY
+

@@ -1,0 +1,83 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy"
+        required: true
+        type: choice
+        options:
+          - backend
+          - frontend
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: read
+        
+        steps:
+            - name: Checkout code at selected tag
+              uses: actions/checkout@v4
+            
+            - name: Setup SSH
+              run: |
+                mkdir -p ~/.ssh
+                echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+                chmod 600 ~/.ssh/id_rsa
+                ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+            
+                echo "=== Checking SSH key format ==="
+                head -n 1 ~/.ssh/id_rsa
+                echo "=== Key loaded ==="
+            
+            - name: Test SSH Connection
+              run: |
+                echo "Testing SSH to ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+                ssh -v ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo '✅ SSH OK'; whoami; pwd"
+
+            - name: Extract version from ref
+              id: extract_version
+              run: |
+                # Get the ref that was selected (e.g., refs/tags/production/backend/0.0.1)
+                REF_NAME="${GITHUB_REF#refs/tags/}"
+
+                if [[ "$REF_NAME" =~ production/backend/([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+                  VERSION=$(echo $REF_NAME | sed "s/production\/${{ inputs.service }}\///")
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "tag_name=$REF_NAME" >> $GITHUB_OUTPUT
+                  echo "Deploying ${{ inputs.service }} version: $VERSION"
+                else
+                  echo "❌ Error: Selected tag '$REF_NAME' doesn't match service '${{ inputs.service }}'"
+                  echo "Expected format: production/${{ inputs.service }}/x.x.x"
+                  exit 1
+                fi
+            
+            - name: Deploy to VPS
+              run: |
+                SERVICE=${{ inputs.service }}
+                VERSION=${{ steps.extract_version.outputs.version }}
+                REMOTE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${SERVICE}:${VERSION}"
+
+                ssh {{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+                  set -e
+                  echo "Pulling image $REMOTE_IMAGE"
+                  docker pull $REMOTE_IMAGE
+
+                  echo "Updating $SERVICE container"
+                  docker stop $SERVICE || true
+                  docker rm $SERVICE || true
+                  IMAGE_TAG=${VERSION} docker compose -f docker-compose.prod.yml up -d $SERVICE
+
+                  echo "✅ Deployed $SERVICE version $VERSION successfully!"
+                EOF
+
+            
+            
+
