@@ -65,7 +65,7 @@ jobs:
                 VERSION=${{ steps.extract_version.outputs.version }}
                 REMOTE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${SERVICE}:${VERSION}"
 
-                ssh {{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+                ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
                   set -e
                   echo "Pulling image $REMOTE_IMAGE"
                   docker pull $REMOTE_IMAGE
