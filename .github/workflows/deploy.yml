@@ -74,7 +74,7 @@ jobs:
                   echo "Updating $SERVICE container"
                   docker stop $SERVICE || true
                   docker rm $SERVICE || true
-                  IMAGE_TAG=${VERSION} docker compose -f docker-compose.prod.yml up -d $SERVICE
+                  IMAGE_TAG=${VERSION} docker compose -f /home/dev/test-compose/docker-compose.prod.yml up -d $SERVICE
 
                   echo "✅ Deployed $SERVICE version $VERSION successfully!"
                 EOF
