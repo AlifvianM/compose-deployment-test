@@ -66,22 +66,15 @@ jobs:
                 LOWER_REPO_NAME=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
                 REMOTE_IMAGE="${{ env.REGISTRY }}/${LOWER_REPO_NAME}/${SERVICE}:${VERSION}"
 
-                ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-                  SERVICE="$SERVICE" \
-                  VERSION="$VERSION" \
-                  IMAGE_NAME="$REMOTE_IMAGE" \
-                  IMAGE_TAG="$VERSION" \
-                  bash << 'EOF'
+                ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
                   set -e
-                  
                   echo "Pulling image $REMOTE_IMAGE"
                   docker pull $REMOTE_IMAGE
 
                   echo "Updating $SERVICE container"
-                  cd /home/dev/test-compose
-                  IMAGE_TAG=${VERSION} docker compose -f /home/dev/test-compose/docker-compose.prod.yml up -d --no-build
+                  IMAGE_TAG=${VERSION} docker compose -f /home/dev/test-compose/docker-compose.prod.yml up -d --no-deps --build $SERVICE
 
-                  echo "✅ Deployed $SERVICE:$IMAGE_TAG successfully!"
+                  echo "✅ Deployed $SERVICE version $VERSION successfully!"
                 EOF
 
             
