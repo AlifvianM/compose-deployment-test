@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  app:
+  backend:
     image: ${IMAGE_NAME}:${IMAGE_TAG:-latest}  # Pakai image dari registry
     ports:
       - "8080:8080"
