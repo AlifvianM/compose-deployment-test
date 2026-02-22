@@ -6,10 +6,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
-    APP_NAME: str
-    APP_ENV: str
-    APP_VERSION: str
-
     POSTGRES_HOST: str
     POSTGRES_PORT: int
     POSTGRES_USER: str
